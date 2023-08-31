@@ -12,3 +12,6 @@ _deps
 build/
 .DS_Store
 .vscode/
+*.srt
+*.mkv
+*.mp4

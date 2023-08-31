@@ -1,3 +1,5 @@
+#include <pybind11/pybind11.h>
+
 #include <cstdlib>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -9,15 +11,17 @@ extern "C" {
 }
 
 using namespace nlohmann;
+namespace py = pybind11;
 
-bool extract_info(std::string file_path, json &result) {
+std::string extract_info(std::string file_path) {
+	json result = json::array();
 	int ret;
 	AVFormatContext *input_ctx = nullptr;
 
 	ret = avformat_open_input(&input_ctx, file_path.c_str(), nullptr, nullptr);
 	if (ret < 0) {
-		std::cerr << "Could not open input file: " << av_err2str(ret) << "\n";
-		return false;
+		std::cerr << "Could not open input file" << std::endl;
+		return NULL;
 	}
 
 	for (unsigned int i = 0; i < input_ctx->nb_streams; i++) {
@@ -43,16 +47,16 @@ bool extract_info(std::string file_path, json &result) {
 	}
 
 	avformat_close_input(&input_ctx);
-	return true;
+	return result.dump();
 }
 
-bool extract_stream(std::string file_path, unsigned int stream_index, std::string output_path) {
+bool extract_stream(std::string file_path, int stream_index, std::string output_path) {
 	int ret;
 	AVFormatContext *input_ctx = nullptr;
 
 	ret = avformat_open_input(&input_ctx, file_path.c_str(), nullptr, nullptr);
 	if (ret < 0) {
-		std::cerr << "Could not open input file: " << av_err2str(ret) << "\n";
+		std::cerr << "Could not open input file" << std::endl;
 		return false;
 	}
 
@@ -61,14 +65,14 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 	AVFormatContext *output_ctx = nullptr;
 	ret = avformat_alloc_output_context2(&output_ctx, nullptr, nullptr, output_path.c_str());
 	if (ret < 0) {
-		std::cerr << "Could not allocate output context: " << av_err2str(ret) << "\n";
+		std::cerr << "Could not allocate output context" << std::endl;
 		avformat_close_input(&input_ctx);
 		return EXIT_FAILURE;
 	}
 
 	AVStream *out_stream = avformat_new_stream(output_ctx, nullptr);
 	if (!out_stream) {
-		std::cerr << "Could not create new stream\n";
+		std::cerr << "Could not create new stream" << std::endl;
 		avformat_close_input(&input_ctx);
 		avformat_free_context(output_ctx);
 		return EXIT_FAILURE;
@@ -76,7 +80,7 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 
 	ret = avcodec_parameters_copy(out_stream->codecpar, stream->codecpar);
 	if (ret < 0) {
-		std::cerr << "Could not copy codec parameters: " << av_err2str(ret) << "\n";
+		std::cerr << "Could not copy codec parameters" << std::endl;
 		avformat_close_input(&input_ctx);
 		avformat_free_context(output_ctx);
 		return EXIT_FAILURE;
@@ -84,7 +88,7 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 
 	ret = avio_open(&output_ctx->pb, output_path.c_str(), AVIO_FLAG_WRITE);
 	if (ret < 0) {
-		std::cerr << "Could not open output file: " << av_err2str(ret) << "\n";
+		std::cerr << "Could not open output file" << std::endl;
 		avformat_close_input(&input_ctx);
 		avformat_free_context(output_ctx);
 		return EXIT_FAILURE;
@@ -92,7 +96,7 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 
 	ret = avformat_write_header(output_ctx, nullptr);
 	if (ret < 0) {
-		std::cerr << "Error writing header: " << av_err2str(ret) << "\n";
+		std::cerr << "Error writing header" << std::endl;
 		avio_closep(&output_ctx->pb);
 		avformat_free_context(output_ctx);
 		return EXIT_FAILURE;
@@ -104,7 +108,7 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 			packet.stream_index = out_stream->index;
 			ret = av_interleaved_write_frame(output_ctx, &packet);
 			if (ret < 0) {
-				std::cerr << "Error writing packet: " << av_err2str(ret) << "\n";
+				std::cerr << "Error writing packet" << std::endl;
 				break;
 			}
 		}
@@ -114,7 +118,7 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 
 	ret = av_write_trailer(output_ctx);
 	if (ret < 0) {
-		std::cerr << "Error writing trailer: " << av_err2str(ret) << "\n";
+		std::cerr << "Error writing trailer" << std::endl;
 		return EXIT_FAILURE;
 	}
 
@@ -125,20 +129,8 @@ bool extract_stream(std::string file_path, unsigned int stream_index, std::strin
 	return true;
 }
 
-int main(int argc, char *argv[]) {
-	std::string file_path(argv[1]);
-	std::string output_path(argv[2]);
-
-	json result = json::array();
-	bool isSuccess = extract_info(file_path, result);
-
-	if (isSuccess) {
-		std::cout << result.dump(4) << std::endl;
-	}
-
-	if (extract_stream(file_path, 2, output_path)) {
-		std::cout << "Extracted!" << std::endl;
-	}
-
-	return 0;
+PYBIND11_MODULE(subextractor, module_handle) {
+	module_handle.doc() = "Subtitle Extractor";
+	module_handle.def("extract_info", &extract_info);
+	module_handle.def("extract_stream", &extract_stream);
 }
