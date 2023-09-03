@@ -32,3 +32,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Python::Python
     "-static-libstdc++"
 )
+
+# Install globally
+if(Python_FOUND)
+    execute_process(
+        COMMAND ${Python_EXECUTABLE} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    
+    message(STATUS "Python site-packages path: ${PYTHON_SITE_PACKAGES}")
+else()
+    message(FATAL_ERROR "Python 3.11 not found.")
+endif()
+
+install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${PYTHON_SITE_PACKAGES})

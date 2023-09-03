@@ -7,10 +7,4 @@ COPY src/ src/
 COPY include/ include/
 COPY CMakeLists.txt ./
 
-RUN mkdir build && cd build && cmake .. && make -j$(nproc)
-
-FROM alpine
-RUN apk update && apk add python3 python3-dev ffmpeg-dev
-
-WORKDIR /app
-COPY --from=builder /work/build/subextractor.*.so .
+RUN mkdir build && cd build && cmake .. && make -j$(nproc) && make install
